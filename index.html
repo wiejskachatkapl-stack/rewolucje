@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#6f1724" />
+  <meta name="theme-color" content="#0a2f63" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -15,12 +15,12 @@
 
   <title>Kuchenne Rewolucje</title>
 
-  <link rel="manifest" href="manifest.webmanifest?v=1000" />
-  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=1002" />
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png?v=1002" />
-  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=1002" />
+  <link rel="manifest" href="manifest.webmanifest?v=1001" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=1001" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png?v=1001" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=1001" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="styles.css?v=1040" />
+  <link rel="stylesheet" href="styles.css?v=1001" />
 
   <style>
     .my-places-transfer {
@@ -36,7 +36,7 @@
       min-height: 42px;
       border: 1px solid rgba(255,255,255,.24);
       border-radius: 10px;
-      background: rgba(20, 43, 29, .94);
+      background: linear-gradient(180deg, rgba(15,52,106,.96), rgba(8,28,58,.96));
       color: #fff;
       font: inherit;
       font-weight: 800;
@@ -46,15 +46,6 @@
     }
     .my-places-transfer-button:active { transform: translateY(1px); }
     .my-places-transfer-button:disabled { opacity: .55; cursor: default; }
-
-    .start-screen {
-      background-image: radial-gradient(circle at 50% 18%, rgba(183,61,74,.60), transparent 34%), linear-gradient(145deg, #180d0f 0%, #55131d 48%, #160c0e 100%) !important;
-    }
-    .kr-start-brand { position:absolute; top:max(7vh,42px); left:50%; transform:translateX(-50%); width:min(92vw,760px); text-align:center; color:#fff; z-index:2; text-shadow:0 3px 16px rgba(0,0,0,.55); pointer-events:none; }
-    .kr-start-brand strong { display:block; font-size:clamp(30px,7vw,72px); line-height:.95; letter-spacing:.035em; font-weight:950; }
-    .kr-start-brand span { display:block; margin-top:10px; font-size:clamp(14px,2.3vw,22px); font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#ffe8cc; }
-    @media (max-height:620px) { .kr-start-brand { top:18px; } .kr-start-brand strong { font-size:clamp(26px,5vw,46px); } .kr-start-brand span { margin-top:5px; font-size:13px; } }
-
     @media (orientation: landscape) and (max-height: 650px) {
       .my-places-transfer { flex-direction: column; }
       .my-places-transfer-button { min-height: 38px; }
@@ -63,14 +54,13 @@
 </head>
 <body>
   <main class="start-screen" aria-label="Kuchenne Rewolucje – mapa restauracji">
-    <div class="kr-start-brand"><strong>KUCHENNE REWOLUCJE</strong><span>mapa restauracji z programu</span></div>
     <div class="actions" aria-label="Menu główne">
       <button class="main-button" id="addButton" type="button">DODAJ</button>
       <button class="main-button" id="mapButton" type="button">MAPA REWOLUCJI</button>
       <button class="main-button main-button-my-places" id="myPlacesButton" type="button">ODWIEDZONE</button>
     </div>
 
-    <div class="app-version" id="appVersion" aria-label="Wersja aplikacji">v1000</div>
+    <div class="app-version" id="appVersion" aria-label="Wersja aplikacji">v1001</div>
   </main>
 
   <section class="add-screen" id="addScreen" aria-label="Dodaj restaurację" hidden>
@@ -79,7 +69,7 @@
         <button class="add-back-button" id="addBackButton" type="button" aria-label="Wróć do ekranu startowego">← COFNIJ</button>
         <div class="add-title-wrap">
           <h1 class="add-title">Dodaj restaurację</h1>
-          <div class="add-version" aria-hidden="true">v1000</div>
+          <div class="add-version" aria-hidden="true">v1001</div>
         </div>
       </div>
 
@@ -138,7 +128,7 @@
         <button class="edit-back-button" id="editBackButton" type="button" aria-label="Wróć do mapy">← COFNIJ</button>
         <div class="edit-title-wrap">
           <h1 class="edit-title">Edytuj restaurację</h1>
-          <div class="edit-version" aria-hidden="true">v1000</div>
+          <div class="edit-version" aria-hidden="true">v1001</div>
         </div>
       </div>
 
@@ -318,7 +308,7 @@
 
     <div class="osm-status" id="osmStatus" role="status" aria-live="polite" hidden></div>
     <div class="location-message" id="locationMessage" role="status" aria-live="polite" hidden></div>
-    <div class="map-version" aria-hidden="true">v1000</div>
+    <div class="map-version" aria-hidden="true">v1001</div>
   </section>
 
   <aside class="nearby-alert" id="nearbyAlert" role="alertdialog" aria-live="assertive" aria-label="Restauracja w pobliżu" hidden>

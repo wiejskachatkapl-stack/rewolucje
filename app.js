@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = 'v1000';
+  const APP_VERSION = 'v1001';
   const STORAGE_KEY = 'kuchenne_rewolucje_points_v1';
   const PROXIMITY_RADIUS_KEY = 'kuchenne_rewolucje_proximity_radius_v1';
   const ALERT_HISTORY_KEY = 'kuchenne_rewolucje_alert_history_v1';
@@ -156,7 +156,7 @@
   const CLUSTER_MAX_ZOOM = 8;
   const CLUSTER_CELL_PX = 76;
   
-  const RESTAURANT_MARKER_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20fill%3D%22%238b1e2d%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223%22%20d%3D%22M32%203C19.3%203%209%2013.3%209%2026c0%2017.3%2023%2035%2023%2035s23-17.7%2023-35C55%2013.3%2044.7%203%2032%203z%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2226%22%20r%3D%2215%22%20fill%3D%22%23fff3e6%22%2F%3E%3Cpath%20d%3D%22M24%2015v21M20%2015v9c0%204%208%204%208%200v-9M42%2015v21M38%2015c0%207%208%207%208%200%22%20fill%3D%22none%22%20stroke%3D%22%238b1e2d%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E";
+  const RESTAURANT_MARKER_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20fill%3D%22%230b3f82%22%20stroke%3D%22%23f4d38b%22%20stroke-width%3D%223%22%20d%3D%22M32%203C19.3%203%209%2013.3%209%2026c0%2017.3%2023%2035%2023%2035s23-17.7%2023-35C55%2013.3%2044.7%203%2032%203z%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2226%22%20r%3D%2215%22%20fill%3D%22%23f7fbff%22%2F%3E%3Cpath%20d%3D%22M24%2015v21M20%2015v9c0%204%208%204%208%200v-9M42%2015v21M38%2015c0%207%208%207%208%200%22%20fill%3D%22none%22%20stroke%3D%22%230b3f82%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E";
 
   const CATEGORY_INFO = {
     revolution: { label: 'Kuchenne Rewolucje', icon: RESTAURANT_MARKER_ICON }
