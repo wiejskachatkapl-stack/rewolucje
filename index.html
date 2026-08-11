@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#6f1724" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Kuchenne Rewolucje" />
+  <meta name="application-name" content="Kuchenne Rewolucje" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <title>Kuchenne Rewolucje</title>
+
+  <link rel="manifest" href="manifest.webmanifest?v=1000" />
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png?v=1002" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png?v=1002" />
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/icons/icon-512.png?v=1002" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="styles.css?v=1040" />
+
+  <style>
+    .my-places-transfer {
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .my-places-transfer[hidden] { display: none !important; }
+    .my-places-transfer-button {
+      flex: 1 1 0;
+      min-height: 42px;
+      border: 1px solid rgba(255,255,255,.24);
+      border-radius: 10px;
+      background: rgba(20, 43, 29, .94);
+      color: #fff;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: .02em;
+      cursor: pointer;
+      padding: 8px 10px;
+    }
+    .my-places-transfer-button:active { transform: translateY(1px); }
+    .my-places-transfer-button:disabled { opacity: .55; cursor: default; }
+
+    .start-screen {
+      background-image: radial-gradient(circle at 50% 18%, rgba(183,61,74,.60), transparent 34%), linear-gradient(145deg, #180d0f 0%, #55131d 48%, #160c0e 100%) !important;
+    }
+    .kr-start-brand { position:absolute; top:max(7vh,42px); left:50%; transform:translateX(-50%); width:min(92vw,760px); text-align:center; color:#fff; z-index:2; text-shadow:0 3px 16px rgba(0,0,0,.55); pointer-events:none; }
+    .kr-start-brand strong { display:block; font-size:clamp(30px,7vw,72px); line-height:.95; letter-spacing:.035em; font-weight:950; }
+    .kr-start-brand span { display:block; margin-top:10px; font-size:clamp(14px,2.3vw,22px); font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#ffe8cc; }
+    @media (max-height:620px) { .kr-start-brand { top:18px; } .kr-start-brand strong { font-size:clamp(26px,5vw,46px); } .kr-start-brand span { margin-top:5px; font-size:13px; } }
+
+    @media (orientation: landscape) and (max-height: 650px) {
+      .my-places-transfer { flex-direction: column; }
+      .my-places-transfer-button { min-height: 38px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="start-screen" aria-label="Kuchenne Rewolucje – mapa restauracji">
+    <div class="kr-start-brand"><strong>KUCHENNE REWOLUCJE</strong><span>mapa restauracji z programu</span></div>
+    <div class="actions" aria-label="Menu główne">
+      <button class="main-button" id="addButton" type="button">DODAJ</button>
+      <button class="main-button" id="mapButton" type="button">MAPA REWOLUCJI</button>
+      <button class="main-button main-button-my-places" id="myPlacesButton" type="button">ODWIEDZONE</button>
+    </div>
+
+    <div class="app-version" id="appVersion" aria-label="Wersja aplikacji">v1000</div>
+  </main>
+
+  <section class="add-screen" id="addScreen" aria-label="Dodaj restaurację" hidden>
+    <div class="add-panel">
+      <div class="add-header">
+        <button class="add-back-button" id="addBackButton" type="button" aria-label="Wróć do ekranu startowego">← COFNIJ</button>
+        <div class="add-title-wrap">
+          <h1 class="add-title">Dodaj restaurację</h1>
+          <div class="add-version" aria-hidden="true">v1000</div>
+        </div>
+      </div>
+
+      <div class="add-content">
+        <label class="field-label" for="placeName">Nazwa restauracji (opcjonalnie)</label>
+        <input class="text-field" id="placeName" type="text" maxlength="100" autocomplete="off" placeholder="np. nazwa restauracji" />
+
+        <div class="section-label">Sposób podania lokalizacji</div>
+        <div class="location-methods" role="group" aria-label="Sposób podania lokalizacji">
+          <button class="method-button is-active" id="manualMethodButton" type="button" data-method="manual">RĘCZNIE</button>
+          <button class="method-button" id="autoMethodButton" type="button" data-method="auto">MOJA LOKALIZACJA</button>
+        </div>
+
+        <div class="coordinates-box" id="coordinatesBox">
+          <div class="coordinate-field">
+            <label class="field-label" for="latitudeInput">Szerokość geograficzna</label>
+            <input class="text-field" id="latitudeInput" type="text" inputmode="decimal" autocomplete="off" placeholder="np. 49.4356" />
+          </div>
+          <div class="coordinate-field">
+            <label class="field-label" for="longitudeInput">Długość geograficzna</label>
+            <input class="text-field" id="longitudeInput" type="text" inputmode="decimal" autocomplete="off" placeholder="np. 20.3136" />
+          </div>
+        </div>
+
+        <div class="auto-location-box" id="autoLocationBox" hidden>
+          <button class="gps-add-button" id="gpsAddButton" type="button">
+            <span class="gps-target" aria-hidden="true">◎</span>
+            POBIERZ MOJĄ LOKALIZACJĘ
+          </button>
+          <div class="gps-result" id="gpsResult" role="status" aria-live="polite">Lokalizacja nie została jeszcze pobrana.</div>
+        </div>
+
+        <div class="section-label">Typ punktu</div>
+        <div class="category-grid" id="categoryGrid" role="group" aria-label="Kategoria miejsca">
+          <button class="category-button is-active" type="button" data-category="revolution">
+            <img src="data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20fill%3D%22%238b1e2d%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223%22%20d%3D%22M32%203C19.3%203%209%2013.3%209%2026c0%2017.3%2023%2035%2023%2035s23-17.7%2023-35C55%2013.3%2044.7%203%2032%203z%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2226%22%20r%3D%2215%22%20fill%3D%22%23fff3e6%22%2F%3E%3Cpath%20d%3D%22M24%2015v21M20%2015v9c0%204%208%204%208%200v-9M42%2015v21M38%2015c0%207%208%207%208%200%22%20fill%3D%22none%22%20stroke%3D%22%238b1e2d%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E" alt="" aria-hidden="true" />
+            <span>Kuchenne Rewolucje</span>
+          </button>
+        </div>
+
+        <label class="field-label date-label" for="dateInput">Data dodania</label>
+        <div class="date-field-wrap">
+          <input class="date-field" id="dateInput" type="date" />
+        </div>
+
+        <div class="add-message" id="addMessage" role="status" aria-live="polite" hidden></div>
+
+        <button class="save-place-button" id="savePlaceButton" type="button">ZAPISZ PUNKT</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="edit-screen" id="editScreen" aria-label="Edytuj restaurację" hidden>
+    <div class="edit-panel">
+      <div class="edit-header">
+        <button class="edit-back-button" id="editBackButton" type="button" aria-label="Wróć do mapy">← COFNIJ</button>
+        <div class="edit-title-wrap">
+          <h1 class="edit-title">Edytuj restaurację</h1>
+          <div class="edit-version" aria-hidden="true">v1000</div>
+        </div>
+      </div>
+
+      <div class="edit-content">
+        <label class="field-label" for="editPlaceName">Nazwa restauracji</label>
+        <input class="text-field" id="editPlaceName" type="text" maxlength="100" autocomplete="off" />
+
+        <div class="coordinates-box edit-coordinates-box">
+          <div class="coordinate-field">
+            <label class="field-label" for="editLatitudeInput">Szerokość geograficzna</label>
+            <input class="text-field" id="editLatitudeInput" type="text" inputmode="decimal" autocomplete="off" />
+          </div>
+          <div class="coordinate-field">
+            <label class="field-label" for="editLongitudeInput">Długość geograficzna</label>
+            <input class="text-field" id="editLongitudeInput" type="text" inputmode="decimal" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="section-label">Typ punktu</div>
+        <div class="category-grid edit-category-grid" id="editCategoryGrid" role="group" aria-label="Kategoria restauracji">
+          <button class="category-button edit-category-button is-active" type="button" data-category="revolution">
+            <img src="data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20fill%3D%22%238b1e2d%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223%22%20d%3D%22M32%203C19.3%203%209%2013.3%209%2026c0%2017.3%2023%2035%2023%2035s23-17.7%2023-35C55%2013.3%2044.7%203%2032%203z%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2226%22%20r%3D%2215%22%20fill%3D%22%23fff3e6%22%2F%3E%3Cpath%20d%3D%22M24%2015v21M20%2015v9c0%204%208%204%208%200v-9M42%2015v21M38%2015c0%207%208%207%208%200%22%20fill%3D%22none%22%20stroke%3D%22%238b1e2d%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E" alt="" aria-hidden="true" />
+            <span>Kuchenne Rewolucje</span>
+          </button>
+        </div>
+
+        <label class="field-label" for="editDateInput">Data dodania</label>
+        <div class="date-field-wrap">
+          <input class="date-field" id="editDateInput" type="date" />
+        </div>
+
+        <label class="field-label" for="editNoteInput">Wiadomość / notatka</label>
+        <textarea class="note-field" id="editNoteInput" maxlength="2000" rows="5" placeholder="Tu możesz dopisać własne uwagi, np. co zamówiłeś, ocenę restauracji albo datę wizyty..."></textarea>
+
+        <div class="edit-message" id="editMessage" role="status" aria-live="polite" hidden></div>
+
+        <div class="edit-actions">
+          <button class="delete-place-button" id="deletePlaceButton" type="button">USUŃ PUNKT</button>
+          <button class="save-edit-button" id="saveEditButton" type="button">ZAPISZ ZMIANY</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="map-screen" id="mapScreen" aria-label="Mapa Polski" hidden>
+    <div id="map" class="map-container" aria-label="Interaktywna mapa OpenStreetMap"></div>
+    <div class="map-top-panel" id="mapTopPanel" aria-label="Sterowanie mapą, legenda i nawigacja">
+      <div class="map-toolbar-row">
+        <button class="map-back-button" id="mapBackButton" type="button" aria-label="Wróć do ekranu startowego">← COFNIJ</button>
+
+        <button class="route-button" id="routeButton" type="button" aria-label="Zaplanuj trasę" title="Zaplanuj trasę">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm10 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm0 2a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z"/>
+            <path d="M8 10h2.5a3.5 3.5 0 0 1 3.5 3.5V14h-2v-.5a1.5 1.5 0 0 0-1.5-1.5H8v-2Zm6 4h2v-3h-2v3Z"/>
+          </svg>
+          <span>TRASA</span>
+        </button>
+
+        <div class="proximity-radius-wrap" id="proximityRadiusWrap">
+          <label for="proximityRadius">ALERT</label>
+          <select id="proximityRadius" aria-label="Odległość ostrzegania o restauracjach">
+            <option value="5000" selected>5 km</option>
+            <option value="10000">10 km</option>
+            <option value="15000">15 km</option>
+            <option value="20000">20 km</option>
+          </select>
+        </div>
+
+        <button class="map-location-button" id="mapLocationButton" type="button" aria-label="Wycentruj mapę na mojej lokalizacji" title="Wycentruj na mojej lokalizacji">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8.25a3.75 3.75 0 1 0 0 7.5 3.75 3.75 0 0 0 0-7.5Zm0 5.5a1.75 1.75 0 1 1 0-3.5 1.75 1.75 0 0 1 0 3.5Z"/>
+            <path d="M13 2.05V4.1a8.02 8.02 0 0 1 6.9 6.9h2.05v2H19.9a8.02 8.02 0 0 1-6.9 6.9v2.05h-2V19.9A8.02 8.02 0 0 1 4.1 13H2.05v-2H4.1A8.02 8.02 0 0 1 11 4.1V2.05h2ZM12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"/>
+          </svg>
+          <span>WYCENTRUJ</span>
+        </button>
+
+        <button class="attraction-preview-button" id="attractionPreviewButton" type="button" aria-haspopup="dialog" aria-controls="attractionPreviewOverlay" aria-label="Otwórz listę restauracji w pobliżu">
+          <span class="attraction-radar" aria-hidden="true"><span class="attraction-radar-dot"></span></span>
+          <span class="attraction-preview-button-label">Restauracje w pobliżu</span>
+          <strong id="attractionPreviewCount" aria-live="polite">—</strong>
+        </button>
+
+        <div class="map-mode-badge" id="mapModeBadge" aria-live="polite" hidden>ODWIEDZONE</div>
+      </div>
+
+      <div class="my-places-transfer" id="myPlacesTransfer" aria-label="Kopia zapasowa odwiedzonych restauracji" hidden>
+        <button class="my-places-transfer-button" id="exportMyPlacesButton" type="button" title="Zapisz kopię odwiedzonych restauracji do pliku">⬇ ZAPISZ PLIK</button>
+        <button class="my-places-transfer-button" id="importMyPlacesButton" type="button" title="Wczytaj odwiedzone restauracje z zapisanej kopii">⬆ WCZYTAJ PLIK</button>
+        <input id="importMyPlacesInput" type="file" accept=".json,application/json" hidden />
+      </div>
+
+      <div class="map-legend" id="mapLegend" aria-label="Filtr restauracji na mapie">
+        <button class="map-legend-item map-legend-all is-active" type="button" data-map-filter="all" aria-pressed="true">WSZYSTKIE</button>
+        <button class="map-legend-item is-active" type="button" data-map-filter="revolution" aria-pressed="true"><img src="data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20fill%3D%22%238b1e2d%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223%22%20d%3D%22M32%203C19.3%203%209%2013.3%209%2026c0%2017.3%2023%2035%2023%2035s23-17.7%2023-35C55%2013.3%2044.7%203%2032%203z%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2226%22%20r%3D%2215%22%20fill%3D%22%23fff3e6%22%2F%3E%3Cpath%20d%3D%22M24%2015v21M20%2015v9c0%204%208%204%208%200v-9M42%2015v21M38%2015c0%207%208%207%208%200%22%20fill%3D%22none%22%20stroke%3D%22%238b1e2d%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E" alt="" aria-hidden="true" />Kuchenne Rewolucje</button>
+      </div>
+
+      <section class="navigation-panel" id="navigationPanel" aria-label="Nawigacja" hidden>
+        <div class="navigation-destination-row">
+          <div class="navigation-destination-copy">
+            <span>CEL</span>
+            <strong id="navigationDestination">—</strong>
+          </div>
+          <span class="navigation-mode" id="navigationMode">🚗 AUTO</span>
+          <button id="navigationStopButton" class="navigation-stop-button" type="button">ZAKOŃCZ</button>
+        </div>
+        <div class="navigation-stats">
+          <div><strong id="navigationRemainingDistance">—</strong><span>do celu</span></div>
+          <div><strong id="navigationRemainingTime">—</strong><span>czas</span></div>
+          <div><strong id="navigationTurnDistance">—</strong><span>do manewru</span></div>
+        </div>
+        <div class="navigation-main">
+          <div class="navigation-arrow" id="navigationArrow" aria-hidden="true">↑</div>
+          <div class="navigation-copy">
+            <span class="navigation-kicker" id="navigationKicker">NAWIGACJA</span>
+            <strong id="navigationInstruction">Jedź zgodnie z trasą</strong>
+            <span id="navigationRoad"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="map-maneuver-overlay" id="mapManeuverOverlay" hidden aria-hidden="true">
+      <div class="map-maneuver-arrow" id="mapManeuverArrow">↑</div>
+      <div class="map-maneuver-distance" id="mapManeuverDistance">0 m</div>
+      <div class="map-lanes" id="mapLanes" hidden></div>
+    </div>
+
+    <section class="route-panel" id="routePanel" aria-label="Planowanie trasy" hidden>
+      <div class="route-panel-head">
+        <div>
+          <strong>PLANUJ TRASĘ</strong>
+          <span>Start: moja aktualna lokalizacja</span>
+        </div>
+        <button class="route-panel-close" id="routePanelClose" type="button" aria-label="Zamknij planowanie trasy">×</button>
+      </div>
+      <label class="route-label" for="routeDestinationInput">Cel podróży</label>
+      <div class="route-search-row">
+        <input id="routeDestinationInput" class="route-destination-input" type="search" maxlength="120" autocomplete="off" placeholder="np. nazwa restauracji, miasto, adres..." />
+        <button id="routeSearchButton" class="route-search-button" type="button">SZUKAJ</button>
+      </div>
+      <div class="route-results" id="routeResults" role="list" aria-live="polite"></div>
+      <div class="route-info" id="routeInfo" role="status" aria-live="polite" hidden></div>
+      <button id="routeClearButton" class="route-clear-button" type="button" hidden>USUŃ TRASĘ</button>
+      <div class="route-source" id="routeSource">Routing: OpenStreetMap.de / OSRM · wyszukiwanie celu: Nominatim</div>
+    </section>
+
+    <div class="route-mode-overlay" id="routeModeOverlay" hidden>
+      <section class="route-mode-dialog" role="dialog" aria-modal="true" aria-labelledby="routeModeDialogTitle">
+        <div class="route-mode-dialog-head">
+          <div>
+            <strong id="routeModeDialogTitle">JAK CHCESZ JECHAĆ?</strong>
+            <span id="routeModeDestinationName">Wybierz sposób dotarcia do celu</span>
+          </div>
+          <button class="route-mode-close" id="routeModeClose" type="button" aria-label="Zamknij wybór rodzaju trasy">×</button>
+        </div>
+        <div class="route-mode-selector route-mode-selector-dialog" id="routeModeSelector" role="group" aria-label="Sposób poruszania się">
+          <button class="route-mode-button" type="button" data-route-mode="car" aria-pressed="false"><span aria-hidden="true">🚗</span><strong>AUTO</strong></button>
+          <button class="route-mode-button" type="button" data-route-mode="bike" aria-pressed="false"><span aria-hidden="true">🚲</span><strong>ROWER</strong></button>
+          <button class="route-mode-button" type="button" data-route-mode="foot" aria-pressed="false"><span aria-hidden="true">🚶</span><strong>PIESZO</strong></button>
+          <button class="route-mode-button" type="button" data-route-mode="hiking" aria-pressed="false"><span aria-hidden="true">🥾</span><strong>GÓRY</strong></button>
+        </div>
+      </section>
+    </div>
+
+    <div class="attraction-preview-overlay" id="attractionPreviewOverlay" hidden>
+      <section class="attraction-preview-panel" role="dialog" aria-modal="true" aria-labelledby="attractionPreviewTitle">
+        <div class="attraction-preview-head">
+          <div>
+            <strong id="attractionPreviewTitle">RESTAURACJE W POBLIŻU</strong>
+            <span id="attractionPreviewSummary">Czekam na lokalizację GPS…</span>
+          </div>
+          <button class="attraction-preview-close" id="attractionPreviewClose" type="button" aria-label="Zamknij listę restauracji">×</button>
+        </div>
+        <div class="attraction-preview-list" id="attractionPreviewList" aria-live="polite"></div>
+      </section>
+    </div>
+
+    <div class="osm-status" id="osmStatus" role="status" aria-live="polite" hidden></div>
+    <div class="location-message" id="locationMessage" role="status" aria-live="polite" hidden></div>
+    <div class="map-version" aria-hidden="true">v1000</div>
+  </section>
+
+  <aside class="nearby-alert" id="nearbyAlert" role="alertdialog" aria-live="assertive" aria-label="Restauracja w pobliżu" hidden>
+    <img class="nearby-alert-icon" id="nearbyAlertIcon" src="data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20fill%3D%22%238b1e2d%22%20stroke%3D%22%23fff%22%20stroke-width%3D%223%22%20d%3D%22M32%203C19.3%203%209%2013.3%209%2026c0%2017.3%2023%2035%2023%2035s23-17.7%2023-35C55%2013.3%2044.7%203%2032%203z%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2226%22%20r%3D%2215%22%20fill%3D%22%23fff3e6%22%2F%3E%3Cpath%20d%3D%22M24%2015v21M20%2015v9c0%204%208%204%208%200v-9M42%2015v21M38%2015c0%207%208%207%208%200%22%20fill%3D%22none%22%20stroke%3D%22%238b1e2d%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E" alt="" aria-hidden="true" />
+    <div class="nearby-alert-copy">
+      <div class="nearby-alert-kicker">RESTAURACJA W POBLIŻU</div>
+      <strong class="nearby-alert-title" id="nearbyAlertTitle">Kuchenne Rewolucje</strong>
+      <div class="nearby-alert-meta" id="nearbyAlertMeta"></div>
+    </div>
+    <div class="nearby-alert-actions">
+      <button id="nearbyAlertShow" type="button">POKAŻ</button>
+      <button id="nearbyAlertAdd" type="button">DODAJ</button>
+      <button id="nearbyAlertDismiss" type="button">POMIŃ</button>
+    </div>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js?v=1000"></script>
+</body>
+</html>
