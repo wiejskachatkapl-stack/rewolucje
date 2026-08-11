@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = 'v1001';
+  const APP_VERSION = 'v1002';
   const STORAGE_KEY = 'kuchenne_rewolucje_points_v1';
   const PROXIMITY_RADIUS_KEY = 'kuchenne_rewolucje_proximity_radius_v1';
   const ALERT_HISTORY_KEY = 'kuchenne_rewolucje_alert_history_v1';
@@ -156,7 +156,104 @@
   const CLUSTER_MAX_ZOOM = 8;
   const CLUSTER_CELL_PX = 76;
   
-  const RESTAURANT_MARKER_ICON = "data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20fill%3D%22%230b3f82%22%20stroke%3D%22%23f4d38b%22%20stroke-width%3D%223%22%20d%3D%22M32%203C19.3%203%209%2013.3%209%2026c0%2017.3%2023%2035%2023%2035s23-17.7%2023-35C55%2013.3%2044.7%203%2032%203z%22%2F%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2226%22%20r%3D%2215%22%20fill%3D%22%23f7fbff%22%2F%3E%3Cpath%20d%3D%22M24%2015v21M20%2015v9c0%204%208%204%208%200v-9M42%2015v21M38%2015c0%207%208%207%208%200%22%20fill%3D%22none%22%20stroke%3D%22%230b3f82%22%20stroke-width%3D%223%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E";
+  const RESTAURANT_STATUS_META = {
+    active: {
+      label: 'Aktywna',
+      colorName: 'niebieska',
+      fill: '#0b3f82',
+      stroke: '#c7ddff',
+      inner: '#f7fbff',
+      utensil: '#0b3f82'
+    },
+    closed: {
+      label: 'Już nie istnieje',
+      colorName: 'czerwona',
+      fill: '#b42318',
+      stroke: '#fecaca',
+      inner: '#fff5f5',
+      utensil: '#8a1c16'
+    },
+    visited: {
+      label: 'Odwiedziłem',
+      colorName: 'zielona',
+      fill: '#1f8f3a',
+      stroke: '#c8f1d1',
+      inner: '#f6fff7',
+      utensil: '#176534'
+    }
+  };
+
+  const RESTAURANT_STATUS_OVERRIDES = {
+    'w małym domku': {
+      status: 'closed',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/czy-restauracja-w-malym-domku-nowa-villa-ostrodzka-jeszcze-istnieje-st9151606'
+    },
+    'nowa villa ostródzka': {
+      status: 'closed',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/czy-restauracja-w-malym-domku-nowa-villa-ostrodzka-jeszcze-istnieje-st9151606'
+    },
+    'bistro w kapuście': {
+      status: 'closed',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/aktualnosci/kuchenne-rewolucje-w-plocku-co-sie-stalo-z-restauracja-bistro-w-kapuscie-u-mariusza-st8259912'
+    },
+    'absynt': {
+      status: 'closed',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/aktualnosci/czy-restauracja-mauritiana-absynt-z-kuchennych-rewolucji-istnieje-nadal-to-kultowy-odcinek-st8506502'
+    },
+    'mauritiana': {
+      status: 'closed',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/aktualnosci/czy-restauracja-mauritiana-absynt-z-kuchennych-rewolucji-istnieje-nadal-to-kultowy-odcinek-st8506502'
+    },
+    'bistro czy kapusty': {
+      status: 'active',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/kuchenne-rewolucje-w-tarnowskich-gorach-czy-bistro-czy-kapusty-istnieje-nadal-st8288531'
+    },
+    'trattoria oliwa sprawiedliwa': {
+      status: 'active',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/jak-radzi-sobie-restauracja-trattoria-oliwa-sprawiedliwa-z-32-sezonu-st9085199'
+    },
+    'bistro sztuka dzika': {
+      status: 'active',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/jak-po-kuchennych-rewolucjach-radzi-sobie-bistro-sztuka-dzika-st9058974'
+    },
+    'przyjemnie podjadaj': {
+      status: 'active',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/czy-przyjemnie-podjadaj-nadal-istnieje-st9112265'
+    },
+    'karczma u ceprów': {
+      status: 'active',
+      sourceLabel: 'TVN',
+      sourceUrl: 'https://tvn.pl/programy/kuchenne-rewolucje/aktualnosci/czy-karczma-u-ceprow-z-kuchennych-rewolucji-istnieje-nadal-st8567279'
+    }
+  };
+
+  function buildRestaurantMarkerIcon(statusKey) {
+    const meta = RESTAURANT_STATUS_META[statusKey] || RESTAURANT_STATUS_META.active;
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+        <path fill="${meta.fill}" stroke="${meta.stroke}" stroke-width="3" d="M32 3C19.3 3 9 13.3 9 26c0 17.3 23 35 23 35s23-17.7 23-35C55 13.3 44.7 3 32 3z"/>
+        <circle cx="32" cy="26" r="15" fill="${meta.inner}"/>
+        <path d="M24 15v21M20 15v9c0 4 8 4 8 0v-9M42 15v21M38 15c0 7 8 7 8 0" fill="none" stroke="${meta.utensil}" stroke-width="3" stroke-linecap="round"/>
+      </svg>`;
+    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  }
+
+  const RESTAURANT_MARKER_ICONS = {
+    active: buildRestaurantMarkerIcon('active'),
+    closed: buildRestaurantMarkerIcon('closed'),
+    visited: buildRestaurantMarkerIcon('visited')
+  };
+
+  const RESTAURANT_MARKER_ICON = RESTAURANT_MARKER_ICONS.active;
 
   const CATEGORY_INFO = {
     revolution: { label: 'Kuchenne Rewolucje', icon: RESTAURANT_MARKER_ICON }
@@ -554,8 +651,97 @@
     return loadPoints().find((point) => String(point.id) === String(id)) || null;
   }
 
-  function createCategoryIcon(category) {
-    const info = CATEGORY_INFO[category] || CATEGORY_INFO.revolution;
+
+  function normalizeRestaurantKey(value) {
+    return String(value || '')
+      .trim()
+      .toLocaleLowerCase('pl-PL')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '');
+  }
+
+  function getRestaurantStatusOverride(target) {
+    const keys = [
+      target?.name,
+      target?.tags?.originalName,
+      target?.originalName,
+      target?.note
+    ]
+      .map((value) => normalizeRestaurantKey(value))
+      .filter(Boolean);
+
+    for (const key of keys) {
+      if (RESTAURANT_STATUS_OVERRIDES[key]) return RESTAURANT_STATUS_OVERRIDES[key];
+    }
+    return null;
+  }
+
+  function getRestaurantStatus(target, options = {}) {
+    const saved = options.savedOverride == null
+      ? Boolean(target?.osmId) && isOsmSaved(target.osmId)
+      : Boolean(options.savedOverride);
+
+    if (saved) {
+      return {
+        code: 'visited',
+        label: RESTAURANT_STATUS_META.visited.label,
+        colorName: RESTAURANT_STATUS_META.visited.colorName,
+        sourceLabel: 'Moje odwiedzone',
+        sourceUrl: ''
+      };
+    }
+
+    const override = getRestaurantStatusOverride(target);
+    if (override && RESTAURANT_STATUS_META[override.status]) {
+      const meta = RESTAURANT_STATUS_META[override.status];
+      return {
+        code: override.status,
+        label: meta.label,
+        colorName: meta.colorName,
+        sourceLabel: override.sourceLabel || 'Zweryfikowano',
+        sourceUrl: override.sourceUrl || ''
+      };
+    }
+
+    return {
+      code: 'active',
+      label: RESTAURANT_STATUS_META.active.label,
+      colorName: RESTAURANT_STATUS_META.active.colorName,
+      sourceLabel: 'Brak sygnału o zamknięciu',
+      sourceUrl: ''
+    };
+  }
+
+  function createRestaurantLeafletIcon(statusCode, variant = 'external') {
+    const code = RESTAURANT_MARKER_ICONS[statusCode] ? statusCode : 'active';
+    const cacheKey = `${variant}:${code}`;
+    if (externalIconCache.has(cacheKey)) return externalIconCache.get(cacheKey);
+    const large = variant === 'stored';
+    const size = large ? 54 : 40;
+    const icon = L.icon({
+      iconUrl: RESTAURANT_MARKER_ICONS[code],
+      iconSize: [size, size],
+      iconAnchor: large ? [27, 51] : [20, 38],
+      popupAnchor: large ? [0, -47] : [0, -34],
+      tooltipAnchor: large ? [0, -44] : [0, -31],
+      className: `tourism-marker-icon ${large ? 'saved-marker-icon' : 'osm-marker-icon'}`
+    });
+    externalIconCache.set(cacheKey, icon);
+    return icon;
+  }
+
+  function getStatusBadgeHtml(statusInfo, extraClass = '') {
+    if (!statusInfo) return '';
+    return `<div class="status-badge status-${escapeHtml(statusInfo.code)} ${extraClass}">${escapeHtml(statusInfo.colorName.toUpperCase())} · ${escapeHtml(statusInfo.label)}</div>`;
+  }
+
+  function createCategoryIcon(category, point = null) {
+    const key = CATEGORY_INFO[category] ? category : 'revolution';
+    if (key === 'revolution') {
+      const status = getRestaurantStatus(point || {}, { savedOverride: Boolean(point?.osmId) }).code;
+      return createRestaurantLeafletIcon(status, 'stored');
+    }
+    const info = CATEGORY_INFO[key];
     return L.icon({
       iconUrl: info.icon,
       iconSize: [54, 54],
@@ -567,11 +753,14 @@
   }
 
 
-  function createExternalCategoryIcon(category) {
-    const key = CATEGORY_INFO[category] ? category : 'revolution';
-    if (externalIconCache.has(key)) return externalIconCache.get(key);
+  function createExternalCategoryIcon(attraction) {
+    const key = CATEGORY_INFO[attraction?.category] ? attraction.category : 'revolution';
+    if (key === 'revolution') {
+      const status = getRestaurantStatus(attraction, { savedOverride: false }).code;
+      return createRestaurantLeafletIcon(status, 'external');
+    }
     const info = CATEGORY_INFO[key];
-    const icon = L.icon({
+    return L.icon({
       iconUrl: info.icon,
       iconSize: [40, 40],
       iconAnchor: [20, 38],
@@ -579,8 +768,6 @@
       tooltipAnchor: [0, -31],
       className: 'tourism-marker-icon osm-marker-icon'
     });
-    externalIconCache.set(key, icon);
-    return icon;
   }
 
   function loadAlertHistory() {
@@ -1082,12 +1269,14 @@
 
     attractionPreviewList.innerHTML = attractionPreviewItems.map(({ attraction, distance }) => {
       const info = CATEGORY_INFO[attraction.category] || CATEGORY_INFO.revolution;
+      const statusInfo = getRestaurantStatus(attraction, { savedOverride: isOsmSaved(attraction.osmId) });
+      const iconUrl = RESTAURANT_MARKER_ICONS[statusInfo.code] || info.icon;
       return `
         <article class="attraction-preview-row">
-          <img class="attraction-preview-icon" src="${info.icon}" alt="" aria-hidden="true" />
+          <img class="attraction-preview-icon" src="${iconUrl}" alt="" aria-hidden="true" />
           <div class="attraction-preview-copy">
             <strong>${escapeHtml(attraction.name || info.label)}</strong>
-            <span>${escapeHtml(info.label)}</span>
+            <span>${escapeHtml(info.label)} · ${escapeHtml(statusInfo.label)}</span>
           </div>
           <div class="attraction-preview-distance">${escapeHtml(formatPreviewDistanceKm(distance))}</div>
           <button class="attraction-preview-route" type="button" data-preview-route-id="${escapeHtml(attraction.osmId)}">PROWADŹ</button>
@@ -1228,16 +1417,20 @@
     const originalName = String(attraction.tags?.originalName || '').trim();
     const address = String(attraction.tags?.address || '').trim();
     const safeSourceUrl = /^https?:\/\//i.test(String(attraction.sourceUrl || '')) ? String(attraction.sourceUrl) : '';
+    const statusInfo = getRestaurantStatus(attraction, { savedOverride: saved });
+    const popupIcon = RESTAURANT_MARKER_ICONS[statusInfo.code] || info.icon;
 
     return `
       <div class="place-popup osm-place-popup">
         <div class="place-popup-head">
-          <img src="${info.icon}" alt="" />
+          <img src="${popupIcon}" alt="" />
           <div>
             <strong>${escapeHtml(attraction.name)}</strong>
             <span>${escapeHtml(episodeLabel)} · Kuchenne Rewolucje</span>
           </div>
         </div>
+        ${getStatusBadgeHtml(statusInfo)}
+        <div class="place-popup-date">Status: ${escapeHtml(statusInfo.label)} · ${escapeHtml(statusInfo.sourceLabel)}</div>
         ${originalName ? `<div class="place-popup-date">Przed rewolucją: ${escapeHtml(originalName)}</div>` : ''}
         ${address ? `<div class="place-popup-date">${escapeHtml(address)}</div>` : ''}
         <div class="place-popup-coords">${Number(attraction.lat).toFixed(6)}, ${Number(attraction.lon).toFixed(6)}</div>
@@ -1246,6 +1439,7 @@
           : ''}
         <button class="place-popup-add-osm" type="button" data-route-osm-id="${escapeHtml(attraction.osmId)}">PROWADŹ</button>
         ${safeSourceUrl ? `<button class="place-popup-add-osm" type="button" data-source-url="${escapeHtml(safeSourceUrl)}">ODCINEK / ŹRÓDŁO</button>` : ''}
+        ${statusInfo.sourceUrl ? `<button class="place-popup-add-osm" type="button" data-source-url="${escapeHtml(statusInfo.sourceUrl)}">STATUS / ŹRÓDŁO</button>` : ''}
         <button class="place-popup-add-osm" type="button" data-wikipedia-query="${escapeHtml(attraction.name)}">SZUKAJ W SIECI</button>
         ${
           saved
@@ -1354,7 +1548,7 @@
       const attraction = item.attraction;
       if (!marker) {
         marker = L.marker([attraction.lat, attraction.lon], {
-          icon: createExternalCategoryIcon(attraction.category),
+          icon: createExternalCategoryIcon(attraction),
           title: attraction.name,
           riseOnHover: true,
           opacity: 0.86
@@ -1560,7 +1754,7 @@
       if (!marker && map && externalLayer) {
         osmAttractions.set(attraction.osmId, attraction);
         marker = L.marker([attraction.lat, attraction.lon], {
-          icon: createExternalCategoryIcon(attraction.category),
+          icon: createExternalCategoryIcon(attraction),
           title: attraction.name,
           riseOnHover: true,
           opacity: 0.9
@@ -2597,15 +2791,20 @@
     const info = CATEGORY_INFO[point.category] || CATEGORY_INFO.revolution;
     const title = point.name?.trim() || info.label;
     const note = point.note?.trim();
+    const statusInfo = point.category === 'revolution'
+      ? getRestaurantStatus(point, { savedOverride: Boolean(point.osmId) })
+      : null;
+    const popupIcon = statusInfo ? RESTAURANT_MARKER_ICONS[statusInfo.code] : info.icon;
     return `
       <div class="place-popup">
         <div class="place-popup-head">
-          <img src="${info.icon}" alt="" />
+          <img src="${popupIcon}" alt="" />
           <div>
             <strong>${escapeHtml(title)}</strong>
             <span>${escapeHtml(info.label)}</span>
           </div>
         </div>
+        ${statusInfo ? getStatusBadgeHtml(statusInfo) : ''}
         <div class="place-popup-date">Dodano: ${escapeHtml(formatDisplayDate(point.date))}</div>
         <div class="place-popup-coords">${Number(point.lat).toFixed(6)}, ${Number(point.lon).toFixed(6)}</div>
         ${note ? `<div class="place-popup-note">${noteHtml(note)}</div>` : ''}
@@ -2627,7 +2826,7 @@
       if (!Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lon))) return;
       if (!attractionMatchesActiveFilter(point.category)) return;
       const marker = L.marker([Number(point.lat), Number(point.lon)], {
-        icon: createCategoryIcon(point.category),
+        icon: createCategoryIcon(point.category, point),
         title: point.name || (CATEGORY_INFO[point.category]?.label ?? 'Miejsce'),
         riseOnHover: true
       }).addTo(pointLayer);

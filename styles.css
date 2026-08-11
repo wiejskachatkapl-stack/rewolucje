@@ -4095,3 +4095,11 @@ body {
   color: #e6f0ff;
   text-shadow: 0 2px 12px rgba(0,0,0,0.45);
 }
+
+
+/* v1002: statusy restauracji */
+.status-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.03em;margin:8px 0 6px;border:1px solid rgba(255,255,255,.18);box-shadow:0 6px 18px rgba(0,0,0,.12);}
+.status-active{background:rgba(16,78,160,.14);color:#0b3f82;border-color:rgba(11,63,130,.25);}
+.status-closed{background:rgba(180,35,24,.12);color:#a32016;border-color:rgba(180,35,24,.22);}
+.status-visited{background:rgba(31,143,58,.14);color:#15672b;border-color:rgba(31,143,58,.24);}
+.place-popup .status-badge,.osm-place-popup .status-badge{margin-top:10px;}
