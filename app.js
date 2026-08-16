@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = 'v1004';
+  const APP_VERSION = 'v1005';
   const STORAGE_KEY = 'kuchenne_rewolucje_points_v1';
   const PROXIMITY_RADIUS_KEY = 'kuchenne_rewolucje_proximity_radius_v1';
   const ALERT_HISTORY_KEY = 'kuchenne_rewolucje_alert_history_v1';
@@ -1733,10 +1733,14 @@
           }).addTo(externalLayer);
           marker.on('click', () => {
             if (!map) return;
-            const latLngs = item.items.map((attraction) => [Number(attraction.lat), Number(attraction.lon)]);
-            const bounds = L.latLngBounds(latLngs);
-            const targetZoom = Math.min(CLUSTER_MAX_ZOOM + 1, map.getZoom() + 2);
-            if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30], maxZoom: targetZoom, animate: true });
+            // v1005: kliknięcie klastra zawsze przechodzi co najmniej o jeden poziom
+            // powyżej progu klastrowania, żeby kółko z liczbą natychmiast rozpadło
+            // się na pojedyncze restauracje.
+            const targetZoom = Math.min(
+              map.getMaxZoom?.() || 19,
+              Math.max(CLUSTER_MAX_ZOOM + 1, map.getZoom() + 2)
+            );
+            map.setView([Number(item.lat), Number(item.lon)], targetZoom, { animate: true });
           });
           osmMarkerById.set(item.key, marker);
         }
@@ -3111,7 +3115,22 @@
     };
     map.on('dragstart', pauseAutoFollowFromUser);
 
-    map.on('moveend zoomend', () => scheduleViewportAttractions());
+    // v1005: klaster musi reagować na sam zoom, także podczas aktywnej trasy.
+    // Wcześniej odświeżanie przechodziło wyłącznie przez scheduleViewportAttractions(),
+    // a ta funkcja celowo nic nie robi przy routeActive. Efekt: kółko z liczbą
+    // pozostawało na mapie mimo dużego powiększenia.
+    map.on('zoomend', () => {
+      if (currentMapMode === 'all' && osmEnabled) {
+        if (routeActive) {
+          renderExternalAttractions(routeAttractions);
+        } else if (osmAttractions.size) {
+          renderExternalAttractions([...osmAttractions.values()]);
+        }
+      }
+      scheduleViewportAttractions(120);
+    });
+
+    map.on('moveend', () => scheduleViewportAttractions());
     scheduleViewportAttractions(250);
   }
 
