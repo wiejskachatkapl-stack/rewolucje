@@ -4103,3 +4103,7 @@ body {
 .status-closed{background:rgba(180,35,24,.12);color:#a32016;border-color:rgba(180,35,24,.22);}
 .status-visited{background:rgba(31,143,58,.14);color:#15672b;border-color:rgba(31,143,58,.24);}
 .place-popup .status-badge,.osm-place-popup .status-badge{margin-top:10px;}
+
+/* v1003: neutralny status dla punktów bez pewnej aktualnej weryfikacji */
+.status-unknown{background:rgba(107,114,128,.13);color:#4b5563;border-color:rgba(107,114,128,.28);}
+.status-factual{margin-left:6px;}

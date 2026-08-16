@@ -1,11 +1,12 @@
 (() => {
-  const APP_VERSION = 'v1002';
+  const APP_VERSION = 'v1003';
   const STORAGE_KEY = 'kuchenne_rewolucje_points_v1';
   const PROXIMITY_RADIUS_KEY = 'kuchenne_rewolucje_proximity_radius_v1';
   const ALERT_HISTORY_KEY = 'kuchenne_rewolucje_alert_history_v1';
   const OSM_ENABLED_KEY = 'kuchenne_rewolucje_database_enabled_v1';
   const USER_DB_KEY = 'kuchenne_rewolucje_user_restaurant_db_v1';
   const ATTRACTION_DB_URL = 'https://raw.githubusercontent.com/zaza/kuchenne-rewolucje/refs/heads/gh-pages/data.geojson';
+  const CURATED_STATUS_URL = './data/statusy-restauracji.json?v=1003';
   const GEOCODE_CACHE_KEY = 'kuchenne_rewolucje_geocode_v1';
   const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
   const ROUTE_MODE_KEY = 'kuchenne_rewolucje_route_mode_v1';
@@ -173,6 +174,14 @@
       inner: '#fff5f5',
       utensil: '#8a1c16'
     },
+    unknown: {
+      label: 'Do weryfikacji',
+      colorName: 'szara',
+      fill: '#6b7280',
+      stroke: '#e5e7eb',
+      inner: '#f9fafb',
+      utensil: '#4b5563'
+    },
     visited: {
       label: 'Odwiedziłem',
       colorName: 'zielona',
@@ -250,6 +259,7 @@
   const RESTAURANT_MARKER_ICONS = {
     active: buildRestaurantMarkerIcon('active'),
     closed: buildRestaurantMarkerIcon('closed'),
+    unknown: buildRestaurantMarkerIcon('unknown'),
     visited: buildRestaurantMarkerIcon('visited')
   };
 
@@ -387,6 +397,10 @@
   let viewportRetryUsed = false;
   const viewportCache = new Map();
   let osmEnabled = true;
+  let curatedRestaurantData = [];
+  let curatedByEpisode = new Map();
+  let curatedDataPromise = null;
+
   let attractionDatabase = [];
   let attractionDatabaseLoaded = false;
   let attractionDatabasePromise = null;
@@ -660,27 +674,27 @@
       .replace(/[̀-ͯ]/g, '');
   }
 
-  function getRestaurantStatusOverride(target) {
-    const keys = [
-      target?.name,
-      target?.tags?.originalName,
-      target?.originalName,
-      target?.note
-    ]
-      .map((value) => normalizeRestaurantKey(value))
-      .filter(Boolean);
-
-    for (const key of keys) {
-      if (RESTAURANT_STATUS_OVERRIDES[key]) return RESTAURANT_STATUS_OVERRIDES[key];
-    }
-    return null;
+  function getRestaurantFactualStatus(target) {
+    const linked = target?.osmId ? attractionDatabase.find((item) => String(item.osmId) === String(target.osmId)) : null;
+    const source = linked || target || {};
+    const code = ['active','closed','unknown'].includes(source?.tags?.status) ? source.tags.status : 'unknown';
+    const meta = RESTAURANT_STATUS_META[code] || RESTAURANT_STATUS_META.unknown;
+    return {
+      code,
+      label: meta.label,
+      colorName: meta.colorName,
+      sourceLabel: source?.tags?.statusSourceLabel || 'Brak pełnej weryfikacji',
+      sourceUrl: source?.tags?.statusSourceUrl || '',
+      checkedAt: source?.tags?.statusCheckedAt || '',
+      confidence: source?.tags?.statusConfidence || '',
+      note: source?.tags?.statusNote || ''
+    };
   }
 
   function getRestaurantStatus(target, options = {}) {
     const saved = options.savedOverride == null
       ? Boolean(target?.osmId) && isOsmSaved(target.osmId)
       : Boolean(options.savedOverride);
-
     if (saved) {
       return {
         code: 'visited',
@@ -690,26 +704,7 @@
         sourceUrl: ''
       };
     }
-
-    const override = getRestaurantStatusOverride(target);
-    if (override && RESTAURANT_STATUS_META[override.status]) {
-      const meta = RESTAURANT_STATUS_META[override.status];
-      return {
-        code: override.status,
-        label: meta.label,
-        colorName: meta.colorName,
-        sourceLabel: override.sourceLabel || 'Zweryfikowano',
-        sourceUrl: override.sourceUrl || ''
-      };
-    }
-
-    return {
-      code: 'active',
-      label: RESTAURANT_STATUS_META.active.label,
-      colorName: RESTAURANT_STATUS_META.active.colorName,
-      sourceLabel: 'Brak sygnału o zamknięciu',
-      sourceUrl: ''
-    };
+    return getRestaurantFactualStatus(target);
   }
 
   function createRestaurantLeafletIcon(statusCode, variant = 'external') {
@@ -903,6 +898,56 @@
     }
   }
 
+  function curatedEpisodeKey(season, episode) {
+    const s = Number(season);
+    const e = Number(episode);
+    return Number.isFinite(s) && Number.isFinite(e) ? `${s}:${e}` : '';
+  }
+
+  async function loadCuratedRestaurantData(force = false) {
+    if (curatedRestaurantData.length && !force) return curatedRestaurantData;
+    if (curatedDataPromise && !force) return curatedDataPromise;
+    curatedDataPromise = (async () => {
+      try {
+        const response = await fetch(CURATED_STATUS_URL, { cache: force ? 'reload' : 'default', headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error(`Statusy HTTP ${response.status}`);
+        const data = await response.json();
+        const items = Array.isArray(data?.restaurants) ? data.restaurants : [];
+        curatedRestaurantData = items;
+        curatedByEpisode = new Map(items.map((item) => [curatedEpisodeKey(item.season, item.episode), item]));
+      } catch (error) {
+        console.warn('Nie udało się wczytać kuratorskich statusów restauracji:', error);
+        if (!curatedRestaurantData.length) curatedByEpisode = new Map();
+      }
+      return curatedRestaurantData;
+    })();
+    try { return await curatedDataPromise; }
+    finally { curatedDataPromise = null; }
+  }
+
+  function getCuratedRestaurant(season, episode) {
+    return curatedByEpisode.get(curatedEpisodeKey(season, episode)) || null;
+  }
+
+  function applyCuratedDataToAttraction(attraction, curated) {
+    if (!attraction || !curated) return attraction;
+    const tags = { ...(attraction.tags || {}) };
+    const beforeName = String(curated.beforeName || tags.originalName || attraction.name || '').trim();
+    const afterName = String(curated.afterName || attraction.name || beforeName).trim();
+    Object.assign(tags, {
+      originalName: beforeName,
+      status: ['active','closed','unknown'].includes(curated.status) ? curated.status : 'unknown',
+      statusNote: curated.statusNote || '',
+      statusSourceLabel: curated.sourceLabel || '',
+      statusSourceUrl: curated.sourceUrl || '',
+      statusCheckedAt: curated.checkedAt || '',
+      statusConfidence: curated.confidence || '',
+      curated: true
+    });
+    if (curated.address) tags.address = curated.address;
+    return { ...attraction, name: afterName || attraction.name, tags };
+  }
+
   function normalizeDatabaseAttraction(item) {
     if (!item) return null;
     const id = String(item.id || item.osmId || '').trim();
@@ -933,7 +978,7 @@
     const season = Number(props.season);
     const episode = Number(props.episode);
     const id = `kr/s${Number.isFinite(season) ? season : 'x'}/e${Number.isFinite(episode) ? episode : index + 1}/${index}`;
-    return {
+    const base = {
       id,
       category: 'revolution',
       name: String(props.name || 'Restauracja po Kuchennych Rewolucjach'),
@@ -942,12 +987,15 @@
       tags: {
         season: Number.isFinite(season) ? season : null,
         episode: Number.isFinite(episode) ? episode : null,
+        originalName: String(props.name || ''),
         homepage: props.homepage || '',
-        originalIcon: props.icon || ''
+        originalIcon: props.icon || '',
+        status: 'unknown'
       },
       source: 'Kuchenne Rewolucje – baza społecznościowa',
       sourceUrl: String(props.url || props.homepage || '')
     };
+    return applyCuratedDataToAttraction(base, getCuratedRestaurant(season, episode));
   }
 
   function loadGeocodeCache() {
@@ -965,7 +1013,8 @@
 
   function currentSeasonToRestaurant(item, coords) {
     if (!item || !coords) return null;
-    return {
+    const curated = getCuratedRestaurant(item.season, item.episode);
+    const base = {
       id: item.id,
       category: 'revolution',
       name: item.name,
@@ -975,12 +1024,14 @@
         season: item.season,
         episode: item.episode,
         originalName: item.originalName,
-        address: item.address,
-        currentSeason: true
+        address: curated?.address || item.address,
+        currentSeason: true,
+        status: 'unknown'
       },
       source: 'TVN – sezon 32',
       sourceUrl: item.sourceUrl || ''
     };
+    return applyCuratedDataToAttraction(base, curated);
   }
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -993,19 +1044,21 @@
       let added = 0;
       for (let index = 0; index < CURRENT_SEASON_ITEMS.length; index += 1) {
         const item = CURRENT_SEASON_ITEMS[index];
-        let coords = cache[item.address];
+        const curated = getCuratedRestaurant(item.season, item.episode);
+        const geocodeAddress = curated?.address || item.address;
+        let coords = cache[geocodeAddress];
         let requested = false;
         if (!coords || !Number.isFinite(Number(coords.lat)) || !Number.isFinite(Number(coords.lon))) {
           try {
             requested = true;
-            const url = `${NOMINATIM_URL}?format=jsonv2&limit=1&countrycodes=pl&accept-language=pl&q=${encodeURIComponent(item.address)}`;
+            const url = `${NOMINATIM_URL}?format=jsonv2&limit=1&countrycodes=pl&accept-language=pl&q=${encodeURIComponent(geocodeAddress)}`;
             const response = await fetch(url, { headers: { Accept: 'application/json' } });
             if (!response.ok) throw new Error(`Nominatim HTTP ${response.status}`);
             const results = await response.json();
             const first = Array.isArray(results) ? results[0] : null;
             if (first && Number.isFinite(Number(first.lat)) && Number.isFinite(Number(first.lon))) {
               coords = { lat: Number(first.lat), lon: Number(first.lon) };
-              cache[item.address] = coords;
+              cache[geocodeAddress] = coords;
               saveGeocodeCache(cache);
             }
           } catch (error) {
@@ -1092,6 +1145,7 @@
 
     attractionDatabasePromise = (async () => {
       let baseItems = [];
+      await loadCuratedRestaurantData(force);
       try {
         const response = await fetch(ATTRACTION_DB_URL, { cache: force ? 'reload' : 'default', headers: { Accept: 'application/json' } });
         if (!response.ok) throw new Error(`Baza HTTP ${response.status}`);
@@ -1269,14 +1323,16 @@
 
     attractionPreviewList.innerHTML = attractionPreviewItems.map(({ attraction, distance }) => {
       const info = CATEGORY_INFO[attraction.category] || CATEGORY_INFO.revolution;
-      const statusInfo = getRestaurantStatus(attraction, { savedOverride: isOsmSaved(attraction.osmId) });
+      const saved = isOsmSaved(attraction.osmId);
+      const factualStatus = getRestaurantFactualStatus(attraction);
+      const statusInfo = saved ? getRestaurantStatus(attraction, { savedOverride: true }) : factualStatus;
       const iconUrl = RESTAURANT_MARKER_ICONS[statusInfo.code] || info.icon;
       return `
         <article class="attraction-preview-row">
           <img class="attraction-preview-icon" src="${iconUrl}" alt="" aria-hidden="true" />
           <div class="attraction-preview-copy">
             <strong>${escapeHtml(attraction.name || info.label)}</strong>
-            <span>${escapeHtml(info.label)} · ${escapeHtml(statusInfo.label)}</span>
+            <span>${escapeHtml(info.label)} · ${saved ? 'Odwiedzone · ' : ''}${escapeHtml(factualStatus.label)}</span>
           </div>
           <div class="attraction-preview-distance">${escapeHtml(formatPreviewDistanceKm(distance))}</div>
           <button class="attraction-preview-route" type="button" data-preview-route-id="${escapeHtml(attraction.osmId)}">PROWADŹ</button>
@@ -1417,8 +1473,9 @@
     const originalName = String(attraction.tags?.originalName || '').trim();
     const address = String(attraction.tags?.address || '').trim();
     const safeSourceUrl = /^https?:\/\//i.test(String(attraction.sourceUrl || '')) ? String(attraction.sourceUrl) : '';
-    const statusInfo = getRestaurantStatus(attraction, { savedOverride: saved });
-    const popupIcon = RESTAURANT_MARKER_ICONS[statusInfo.code] || info.icon;
+    const factualStatus = getRestaurantFactualStatus(attraction);
+    const visitedInfo = saved ? getRestaurantStatus(attraction, { savedOverride: true }) : null;
+    const popupIcon = saved ? RESTAURANT_MARKER_ICONS.visited : (RESTAURANT_MARKER_ICONS[factualStatus.code] || info.icon);
 
     return `
       <div class="place-popup osm-place-popup">
@@ -1429,23 +1486,23 @@
             <span>${escapeHtml(episodeLabel)} · Kuchenne Rewolucje</span>
           </div>
         </div>
-        ${getStatusBadgeHtml(statusInfo)}
-        <div class="place-popup-date">Status: ${escapeHtml(statusInfo.label)} · ${escapeHtml(statusInfo.sourceLabel)}</div>
-        ${originalName ? `<div class="place-popup-date">Przed rewolucją: ${escapeHtml(originalName)}</div>` : ''}
+        ${visitedInfo ? getStatusBadgeHtml(visitedInfo) : ''}
+        ${getStatusBadgeHtml(factualStatus, 'status-factual')}
+        ${originalName && normalizeRestaurantKey(originalName) !== normalizeRestaurantKey(attraction.name) ? `<div class="place-popup-date">Przed rewolucją: ${escapeHtml(originalName)}</div>` : ''}
         ${address ? `<div class="place-popup-date">${escapeHtml(address)}</div>` : ''}
+        ${factualStatus.checkedAt ? `<div class="place-popup-date">Status sprawdzony: ${escapeHtml(factualStatus.checkedAt)} · ${escapeHtml(factualStatus.sourceLabel)}</div>` : ''}
+        ${factualStatus.note ? `<div class="place-popup-note">${escapeHtml(factualStatus.note)}</div>` : ''}
         <div class="place-popup-coords">${Number(attraction.lat).toFixed(6)}, ${Number(attraction.lon).toFixed(6)}</div>
         ${routeActive && Number.isFinite(Number(attraction.routeDistanceMeters))
           ? `<div class="place-popup-date">Od trasy: ${escapeHtml(formatDistance(Number(attraction.routeDistanceMeters)))}</div>`
           : ''}
         <button class="place-popup-add-osm" type="button" data-route-osm-id="${escapeHtml(attraction.osmId)}">PROWADŹ</button>
         ${safeSourceUrl ? `<button class="place-popup-add-osm" type="button" data-source-url="${escapeHtml(safeSourceUrl)}">ODCINEK / ŹRÓDŁO</button>` : ''}
-        ${statusInfo.sourceUrl ? `<button class="place-popup-add-osm" type="button" data-source-url="${escapeHtml(statusInfo.sourceUrl)}">STATUS / ŹRÓDŁO</button>` : ''}
+        ${factualStatus.sourceUrl ? `<button class="place-popup-add-osm" type="button" data-source-url="${escapeHtml(factualStatus.sourceUrl)}">STATUS / ŹRÓDŁO</button>` : ''}
         <button class="place-popup-add-osm" type="button" data-wikipedia-query="${escapeHtml(attraction.name)}">SZUKAJ W SIECI</button>
-        ${
-          saved
-            ? '<div class="osm-saved-badge">TA RESTAURACJA JEST JUŻ W ODWIEDZONYCH</div>'
-            : `<button class="place-popup-add-osm" type="button" data-add-osm-id="${escapeHtml(attraction.osmId)}">DODAJ DO ODWIEDZONYCH</button>`
-        }
+        ${saved
+          ? '<div class="osm-saved-badge">TA RESTAURACJA JEST JUŻ W ODWIEDZONYCH</div>'
+          : `<button class="place-popup-add-osm" type="button" data-add-osm-id="${escapeHtml(attraction.osmId)}">DODAJ DO ODWIEDZONYCH</button>`}
       </div>
     `;
   }
@@ -1712,6 +1769,7 @@
       lon: Number(attraction.lon),
       source: 'database',
       osmId: attraction.osmId,
+      restaurantMeta: { name: attraction.name, tags: attraction.tags || {} },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -2791,25 +2849,31 @@
     const info = CATEGORY_INFO[point.category] || CATEGORY_INFO.revolution;
     const title = point.name?.trim() || info.label;
     const note = point.note?.trim();
-    const statusInfo = point.category === 'revolution'
-      ? getRestaurantStatus(point, { savedOverride: Boolean(point.osmId) })
-      : null;
-    const popupIcon = statusInfo ? RESTAURANT_MARKER_ICONS[statusInfo.code] : info.icon;
+    const visitedInfo = point.category === 'revolution' ? getRestaurantStatus(point, { savedOverride: true }) : null;
+    const factualStatus = point.category === 'revolution' ? getRestaurantFactualStatus(point) : null;
+    const popupIcon = visitedInfo ? RESTAURANT_MARKER_ICONS.visited : info.icon;
+    const linked = point?.osmId ? attractionDatabase.find((item) => String(item.osmId) === String(point.osmId)) : null;
+    const originalName = String(linked?.tags?.originalName || '').trim();
     return `
       <div class="place-popup">
         <div class="place-popup-head">
           <img src="${popupIcon}" alt="" />
           <div>
-            <strong>${escapeHtml(title)}</strong>
+            <strong>${escapeHtml(linked?.name || title)}</strong>
             <span>${escapeHtml(info.label)}</span>
           </div>
         </div>
-        ${statusInfo ? getStatusBadgeHtml(statusInfo) : ''}
-        <div class="place-popup-date">Dodano: ${escapeHtml(formatDisplayDate(point.date))}</div>
+        ${visitedInfo ? getStatusBadgeHtml(visitedInfo) : ''}
+        ${factualStatus ? getStatusBadgeHtml(factualStatus, 'status-factual') : ''}
+        ${originalName ? `<div class="place-popup-date">Przed rewolucją: ${escapeHtml(originalName)}</div>` : ''}
+        ${factualStatus?.checkedAt ? `<div class="place-popup-date">Status sprawdzony: ${escapeHtml(factualStatus.checkedAt)} · ${escapeHtml(factualStatus.sourceLabel)}</div>` : ''}
+        ${factualStatus?.note ? `<div class="place-popup-note">${escapeHtml(factualStatus.note)}</div>` : ''}
+        <div class="place-popup-date">Odwiedzone: ${escapeHtml(formatDisplayDate(point.date))}</div>
         <div class="place-popup-coords">${Number(point.lat).toFixed(6)}, ${Number(point.lon).toFixed(6)}</div>
         ${note ? `<div class="place-popup-note">${noteHtml(note)}</div>` : ''}
         <button class="place-popup-edit" type="button" data-route-point-id="${escapeHtml(point.id)}">PROWADŹ</button>
-        <button class="place-popup-edit" type="button" data-wikipedia-query="${escapeHtml(title)}">SZUKAJ W SIECI</button>
+        ${factualStatus?.sourceUrl ? `<button class="place-popup-edit" type="button" data-source-url="${escapeHtml(factualStatus.sourceUrl)}">STATUS / ŹRÓDŁO</button>` : ''}
+        <button class="place-popup-edit" type="button" data-wikipedia-query="${escapeHtml(linked?.name || title)}">SZUKAJ W SIECI</button>
         <button class="place-popup-edit" type="button" data-edit-point-id="${escapeHtml(point.id)}">EDYTUJ</button>
       </div>
     `;

@@ -1,4 +1,4 @@
-const APP_VERSION = 'v1002';
+const APP_VERSION = 'v1003';
 const CACHE_NAME = `kuchenne-rewolucje-${APP_VERSION}`;
 const REMOTE_DATA_URL = 'https://raw.githubusercontent.com/zaza/kuchenne-rewolucje/refs/heads/gh-pages/data.geojson';
 
@@ -6,8 +6,9 @@ const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
-  './app.js?v=1002',
+  './app.js?v=1003',
   './manifest.webmanifest',
+  './data/statusy-restauracji.json?v=1003',
   './assets/bg-desktop.png',
   './assets/bg-mobile.png',
   './assets/icons/icon-192.png',
