@@ -4107,3 +4107,49 @@ body {
 /* v1003: neutralny status dla punktów bez pewnej aktualnej weryfikacji */
 .status-unknown{background:rgba(107,114,128,.13);color:#4b5563;border-color:rgba(107,114,128,.28);}
 .status-factual{margin-left:6px;}
+
+
+/* v1004 — ręczna zmiana statusu restauracji */
+.restaurant-status-editor {
+  margin: 10px 0 8px;
+  padding: 9px;
+  border: 1px solid rgba(11, 63, 130, .16);
+  border-radius: 12px;
+  background: rgba(240, 246, 255, .72);
+}
+.restaurant-status-editor-title {
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 900;
+  color: #17253b;
+  letter-spacing: .025em;
+}
+.restaurant-status-editor-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.status-edit-button {
+  min-height: 32px;
+  border-radius: 9px;
+  border: 1px solid rgba(20, 35, 55, .18);
+  font: 800 10px/1.1 Arial, Helvetica, sans-serif;
+  letter-spacing: .02em;
+  cursor: pointer;
+  color: #fff;
+  box-shadow: 0 3px 9px rgba(0,0,0,.12);
+}
+.status-edit-button.is-selected { outline: 3px solid rgba(20, 35, 55, .25); outline-offset: 1px; }
+.status-edit-active { background: #0b3f82 !important; }
+.status-edit-closed { background: #b42318 !important; }
+.status-edit-unknown { background: #6b7280 !important; }
+.status-edit-reset { background: #26364c !important; }
+.restaurant-status-editor-note {
+  margin-top: 7px;
+  font: 600 10px/1.35 Arial, Helvetica, sans-serif;
+  color: #536274;
+}
+@media (max-width: 420px) {
+  .restaurant-status-editor-actions { grid-template-columns: 1fr 1fr; }
+  .status-edit-button { min-height: 30px; font-size: 9px; }
+}

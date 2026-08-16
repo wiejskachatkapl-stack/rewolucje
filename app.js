@@ -1,15 +1,16 @@
 (() => {
-  const APP_VERSION = 'v1003';
+  const APP_VERSION = 'v1004';
   const STORAGE_KEY = 'kuchenne_rewolucje_points_v1';
   const PROXIMITY_RADIUS_KEY = 'kuchenne_rewolucje_proximity_radius_v1';
   const ALERT_HISTORY_KEY = 'kuchenne_rewolucje_alert_history_v1';
   const OSM_ENABLED_KEY = 'kuchenne_rewolucje_database_enabled_v1';
   const USER_DB_KEY = 'kuchenne_rewolucje_user_restaurant_db_v1';
   const ATTRACTION_DB_URL = 'https://raw.githubusercontent.com/zaza/kuchenne-rewolucje/refs/heads/gh-pages/data.geojson';
-  const CURATED_STATUS_URL = './data/statusy-restauracji.json?v=1003';
+  const CURATED_STATUS_URL = './data/statusy-restauracji.json?v=1004';
   const GEOCODE_CACHE_KEY = 'kuchenne_rewolucje_geocode_v1';
   const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
   const ROUTE_MODE_KEY = 'kuchenne_rewolucje_route_mode_v1';
+  const MANUAL_STATUS_KEY = 'kuchenne_rewolucje_manual_restaurant_status_v1';
   const ROUTE_MODES = {
     car: {
       label: 'AUTO', icon: '🚗',
@@ -544,18 +545,22 @@
 
   function exportMyPlaces() {
     const places = loadPoints();
-    if (!places.length) {
-      showLocationMessage('Nie masz jeszcze miejsc do zapisania.');
+    const statusOverrides = loadManualStatusOverrides();
+    const statusOverrideCount = Object.keys(statusOverrides).length;
+    if (!places.length && !statusOverrideCount) {
+      showLocationMessage('Nie masz jeszcze odwiedzonych miejsc ani ręcznie zmienionych statusów do zapisania.');
       return;
     }
 
     const payload = {
       format: 'kuchenne-rewolucje-visited-restaurants',
-      formatVersion: 1,
+      formatVersion: 2,
       appVersion: APP_VERSION,
       exportedAt: new Date().toISOString(),
       count: places.length,
-      places
+      statusOverrideCount,
+      places,
+      statusOverrides
     };
     const json = JSON.stringify(payload, null, 2);
     const filename = `kuchenne rewolucje ${localDateString(new Date())}.json`;
@@ -574,7 +579,7 @@
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
-      showLocationMessage(`Zapisano ${places.length} miejsc. Plik: ${filename}`);
+      showLocationMessage(`Zapisano ${places.length} odwiedzonych miejsc i ${statusOverrideCount} ręcznych statusów. Plik: ${filename}`);
     } catch (error) {
       console.error('Nie udało się zapisać kopii miejsc:', error);
       showLocationMessage('Nie udało się rozpocząć zapisu pliku. Spróbuj ponownie.');
@@ -605,13 +610,15 @@
       if (!Array.isArray(parsed) && parsed?.format && parsed.format !== 'kuchenne-rewolucje-visited-restaurants') {
         throw new Error('To nie jest plik kopii Moich miejsc');
       }
-      const rawPlaces = Array.isArray(parsed) ? parsed : parsed?.places;
-      if (!Array.isArray(rawPlaces)) throw new Error('Nieprawidłowy format kopii');
+      const rawPlaces = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.places) ? parsed.places : []);
+      const rawStatusOverrides = !Array.isArray(parsed) && parsed?.statusOverrides && typeof parsed.statusOverrides === 'object' && !Array.isArray(parsed.statusOverrides)
+        ? parsed.statusOverrides
+        : {};
 
       const imported = rawPlaces
         .map((point, index) => normalizeImportedPoint(point, index))
         .filter(Boolean);
-      if (!imported.length) throw new Error('Brak poprawnych miejsc w pliku');
+      if (!imported.length && !Object.keys(rawStatusOverrides).length) throw new Error('Brak poprawnych miejsc lub statusów w pliku');
 
       const existing = loadPoints().map((point, index) => normalizeImportedPoint(point, index)).filter(Boolean);
       const merged = new Map();
@@ -636,6 +643,20 @@
         }
       });
 
+      const existingStatusOverrides = loadManualStatusOverrides();
+      let importedStatuses = 0;
+      Object.entries(rawStatusOverrides).forEach(([key, value]) => {
+        if (!value || typeof value !== 'object' || !['active', 'closed', 'unknown'].includes(value.status)) return;
+        const current = existingStatusOverrides[key];
+        const incomingTime = Date.parse(String(value.updatedAt || '')) || 0;
+        const currentTime = Date.parse(String(current?.updatedAt || '')) || 0;
+        if (!current || incomingTime >= currentTime) {
+          existingStatusOverrides[key] = value;
+          importedStatuses += 1;
+        }
+      });
+      saveManualStatusOverrides(existingStatusOverrides);
+
       const result = [...merged.values()];
       savePoints(result);
       migrateSavedPointsIntoUserDatabase();
@@ -651,7 +672,7 @@
         else if (coords.length > 1) map.fitBounds(coords, { padding: [28, 28], maxZoom: 13 });
       }
 
-      showLocationMessage(`Wczytano kopię: dodano ${added}, zaktualizowano ${updated}, bez zmian ${skipped}. Razem: ${result.length}.`);
+      showLocationMessage(`Wczytano kopię: odwiedzone ${result.length}, ręczne statusy ${importedStatuses}. Dodano ${added}, zaktualizowano ${updated}, bez zmian ${skipped}.`);
     } catch (error) {
       console.error('Nie udało się wczytać kopii miejsc:', error);
       showLocationMessage('Nie udało się wczytać tego pliku. Wybierz plik kuchenne rewolucje YYYY-MM-DD.json zapisany przez aplikację.');
@@ -674,9 +695,127 @@
       .replace(/[̀-ͯ]/g, '');
   }
 
+
+  function loadManualStatusOverrides() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(MANUAL_STATUS_KEY) || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (error) {
+      console.warn('Nie udało się odczytać ręcznych statusów restauracji:', error);
+      return {};
+    }
+  }
+
+  function saveManualStatusOverrides(overrides) {
+    try {
+      localStorage.setItem(MANUAL_STATUS_KEY, JSON.stringify(overrides || {}));
+    } catch (error) {
+      console.warn('Nie udało się zapisać ręcznych statusów restauracji:', error);
+    }
+  }
+
+  function restaurantStatusTarget(target) {
+    if (!target) return null;
+    if (target?.tags?.season != null && target?.tags?.episode != null) return target;
+    if (target?.osmId) {
+      const linked = attractionDatabase.find((item) => String(item.osmId) === String(target.osmId));
+      if (linked) return linked;
+    }
+    return target;
+  }
+
+  function restaurantStatusKey(target) {
+    const source = restaurantStatusTarget(target) || {};
+    const season = Number(source?.tags?.season);
+    const episode = Number(source?.tags?.episode);
+    if (Number.isFinite(season) && Number.isFinite(episode)) return `episode:${season}:${episode}`;
+    if (source?.osmId) return `osm:${String(source.osmId)}`;
+    if (source?.id) return `id:${String(source.id)}`;
+    const name = normalizeRestaurantKey(source?.name || source?.tags?.originalName || '');
+    const lat = Number(source?.lat);
+    const lon = Number(source?.lon);
+    if (name && Number.isFinite(lat) && Number.isFinite(lon)) return `geo:${lat.toFixed(5)}:${lon.toFixed(5)}:${name}`;
+    return name ? `name:${name}` : '';
+  }
+
+  function getManualRestaurantStatus(target) {
+    const key = restaurantStatusKey(target);
+    if (!key) return null;
+    const item = loadManualStatusOverrides()[key];
+    if (!item || !['active', 'closed', 'unknown'].includes(item.status)) return null;
+    return { ...item, key };
+  }
+
+  function setManualRestaurantStatus(target, status) {
+    const key = restaurantStatusKey(target);
+    if (!key) return false;
+    const overrides = loadManualStatusOverrides();
+    if (status === 'source' || status == null) {
+      delete overrides[key];
+      saveManualStatusOverrides(overrides);
+      return true;
+    }
+    if (!['active', 'closed', 'unknown'].includes(status)) return false;
+    const source = restaurantStatusTarget(target) || target || {};
+    overrides[key] = {
+      status,
+      name: String(source?.name || '').trim(),
+      season: Number.isFinite(Number(source?.tags?.season)) ? Number(source.tags.season) : null,
+      episode: Number.isFinite(Number(source?.tags?.episode)) ? Number(source.tags.episode) : null,
+      updatedAt: new Date().toISOString()
+    };
+    saveManualStatusOverrides(overrides);
+    return true;
+  }
+
+  function refreshRestaurantStatusMarkers(target = null) {
+    externalIconCache.clear();
+    const id = String(target?.osmId || '');
+    if (id && osmMarkerById.has(id) && externalLayer) {
+      const marker = osmMarkerById.get(id);
+      externalLayer.removeLayer(marker);
+      osmMarkerById.delete(id);
+    }
+    renderStoredPoints();
+    if (currentMapMode === 'all' && osmAttractions.size) renderExternalAttractions([...osmAttractions.values()]);
+    if (attractionPreviewOverlay && !attractionPreviewOverlay.hidden) renderAttractionPreviewList();
+  }
+
+  function statusEditControlsHtml(target, factualStatus) {
+    const id = String(target?.osmId || '').trim();
+    if (!id) return '';
+    const manual = getManualRestaurantStatus(target);
+    return `
+      <div class="restaurant-status-editor">
+        <div class="restaurant-status-editor-title">Zmień status lokalu</div>
+        <div class="restaurant-status-editor-actions">
+          <button type="button" class="status-edit-button status-edit-active ${manual?.status === 'active' ? 'is-selected' : ''}" data-status-osm-id="${escapeHtml(id)}" data-status-value="active">OTWARTA</button>
+          <button type="button" class="status-edit-button status-edit-closed ${manual?.status === 'closed' ? 'is-selected' : ''}" data-status-osm-id="${escapeHtml(id)}" data-status-value="closed">ZAMKNIĘTA</button>
+          <button type="button" class="status-edit-button status-edit-unknown ${manual?.status === 'unknown' ? 'is-selected' : ''}" data-status-osm-id="${escapeHtml(id)}" data-status-value="unknown">DO WERYFIKACJI</button>
+          <button type="button" class="status-edit-button status-edit-reset" data-status-osm-id="${escapeHtml(id)}" data-status-value="source">STATUS Z BAZY</button>
+        </div>
+        <div class="restaurant-status-editor-note">${manual ? 'Twój ręczny status ma pierwszeństwo przed danymi z internetu.' : `Aktualnie używany jest status z bazy: ${escapeHtml(factualStatus?.label || 'Do weryfikacji')}.`}</div>
+      </div>`;
+  }
+
   function getRestaurantFactualStatus(target) {
     const linked = target?.osmId ? attractionDatabase.find((item) => String(item.osmId) === String(target.osmId)) : null;
     const source = linked || target || {};
+    const manual = getManualRestaurantStatus(source);
+    if (manual) {
+      const meta = RESTAURANT_STATUS_META[manual.status] || RESTAURANT_STATUS_META.unknown;
+      return {
+        code: manual.status,
+        label: meta.label,
+        colorName: meta.colorName,
+        sourceLabel: 'Ręcznie ustawione przeze mnie',
+        sourceUrl: '',
+        checkedAt: manual.updatedAt ? localDateString(new Date(manual.updatedAt)) : '',
+        confidence: 'manual',
+        note: 'Ten status został ustawiony ręcznie w aplikacji.',
+        manual: true
+      };
+    }
     const code = ['active','closed','unknown'].includes(source?.tags?.status) ? source.tags.status : 'unknown';
     const meta = RESTAURANT_STATUS_META[code] || RESTAURANT_STATUS_META.unknown;
     return {
@@ -687,7 +826,8 @@
       sourceUrl: source?.tags?.statusSourceUrl || '',
       checkedAt: source?.tags?.statusCheckedAt || '',
       confidence: source?.tags?.statusConfidence || '',
-      note: source?.tags?.statusNote || ''
+      note: source?.tags?.statusNote || '',
+      manual: false
     };
   }
 
@@ -1492,6 +1632,7 @@
         ${address ? `<div class="place-popup-date">${escapeHtml(address)}</div>` : ''}
         ${factualStatus.checkedAt ? `<div class="place-popup-date">Status sprawdzony: ${escapeHtml(factualStatus.checkedAt)} · ${escapeHtml(factualStatus.sourceLabel)}</div>` : ''}
         ${factualStatus.note ? `<div class="place-popup-note">${escapeHtml(factualStatus.note)}</div>` : ''}
+        ${statusEditControlsHtml(attraction, factualStatus)}
         <div class="place-popup-coords">${Number(attraction.lat).toFixed(6)}, ${Number(attraction.lon).toFixed(6)}</div>
         ${routeActive && Number.isFinite(Number(attraction.routeDistanceMeters))
           ? `<div class="place-popup-date">Od trasy: ${escapeHtml(formatDistance(Number(attraction.routeDistanceMeters)))}</div>`
@@ -2868,6 +3009,7 @@
         ${originalName ? `<div class="place-popup-date">Przed rewolucją: ${escapeHtml(originalName)}</div>` : ''}
         ${factualStatus?.checkedAt ? `<div class="place-popup-date">Status sprawdzony: ${escapeHtml(factualStatus.checkedAt)} · ${escapeHtml(factualStatus.sourceLabel)}</div>` : ''}
         ${factualStatus?.note ? `<div class="place-popup-note">${escapeHtml(factualStatus.note)}</div>` : ''}
+        ${point.osmId ? statusEditControlsHtml({ ...point, osmId: point.osmId }, factualStatus) : ''}
         <div class="place-popup-date">Odwiedzone: ${escapeHtml(formatDisplayDate(point.date))}</div>
         <div class="place-popup-coords">${Number(point.lat).toFixed(6)}, ${Number(point.lon).toFixed(6)}</div>
         ${note ? `<div class="place-popup-note">${noteHtml(note)}</div>` : ''}
@@ -3456,6 +3598,30 @@
   deletePlaceButton?.addEventListener('click', deleteEditedPoint);
 
   document.addEventListener('click', (event) => {
+    const statusButton = event.target.closest('[data-status-osm-id][data-status-value]');
+    if (statusButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const osmId = String(statusButton.dataset.statusOsmId || '').trim();
+      const statusValue = String(statusButton.dataset.statusValue || '').trim();
+      const target = getOsmAttractionById(osmId)
+        || attractionDatabase.find((item) => String(item.osmId) === osmId)
+        || loadPoints().find((point) => String(point.osmId || '') === osmId);
+      if (target && setManualRestaurantStatus(target, statusValue)) {
+        const message = statusValue === 'source'
+          ? 'Przywrócono status z bazy.'
+          : statusValue === 'active'
+            ? 'Ustawiono: restauracja otwarta.'
+            : statusValue === 'closed'
+              ? 'Ustawiono: restauracja zamknięta.'
+              : 'Ustawiono: status do weryfikacji.';
+        map?.closePopup();
+        refreshRestaurantStatusMarkers(target);
+        showLocationMessage(message);
+      }
+      return;
+    }
+
     const sourceButton = event.target.closest('[data-source-url]');
     if (sourceButton) {
       event.preventDefault();
